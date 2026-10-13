@@ -1,0 +1,9 @@
+{
+  "name": "pricelens",
+  "version": "1.0.0",
+  "description": "PriceLens - used car and bike resale value estimator on real listing data",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "train": "python3 ml/train.py" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "bcryptjs": "^3.0.0", "cookie-parser": "^1.4.7", "express": "^5.1.0", "jsonwebtoken": "^9.0.2", "pg": "^8.13.0", "@electric-sql/pglite": "^0.5.9" }
+}

@@ -1,0 +1,15 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Market pulse - PriceLens</title><link rel="stylesheet" href="/app.css"></head><body>
+<div id="app"><div style="display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:12px"><div><div class="mono">What the data says</div><h1 class="serif" style="margin-top:8px">Market pulse.</h1></div><div style="display:flex;gap:8px"><button class="chip on" data-c="car">Cars</button><button class="chip" data-c="bike">Bikes</button></div></div>
+<div class="grid cols" style="grid-template-columns:repeat(12,1fr);margin-top:24px"><div class="card" style="grid-column:span 7"><div class="lab" id="l1"></div><div id="ch"></div><div class="mono" id="cn" style="margin-top:6px;text-transform:none;letter-spacing:.02em;font-size:12px"></div></div>
+<div class="card" style="grid-column:span 5"><div class="lab" id="l2"></div><div id="ages"></div></div>
+<div class="card" style="grid-column:span 12"><div class="lab" id="l3"></div><div id="top"></div></div></div></div>
+<script src="/app.js"></script><script>
+(async()=>{await shell('side','/market');
+document.getElementById('l1').innerHTML=ic('trend',14)+' Median asking price by vehicle age';document.getElementById('l2').innerHTML=ic('db',14)+' Listings per age';document.getElementById('l3').innerHTML=ic('list',14)+' Most-listed models';
+async function load(c){const m=await api('/api/market/'+c);const a=m.by_age;
+ document.getElementById('ch').innerHTML=lineChart({w:700,h:280,pts:a.map(r=>({x:r.age,y:r.median_price,label:r.age%4==0?r.age+'y':''}))});
+ document.getElementById('cn').textContent=`${num(m.rows)} listings. Each point is the median asking price of listings that age (ages with fewer than 8 listings are left out). ${m.base_age_note}`;
+ document.getElementById('ages').innerHTML=`<table class="t"><tr><th>Age</th><th>Listings</th><th>Median asking</th><th>Median km</th></tr>${a.slice(0,10).map(r=>`<tr><td>${r.age} yr</td><td class="muted">${r.n}</td><td class="n">${inrK(r.median_price)}</td><td class="muted">${num(r.median_km)}</td></tr>`).join('')}</table>`;
+ document.getElementById('top').innerHTML=`<table class="t"><tr><th>Model</th><th>Listings</th><th>Model years</th><th>Median asking</th><th>Median km</th><th></th></tr>${m.top.map(r=>`<tr><td>${esc(r.model)}</td><td class="muted">${r.n}</td><td class="muted">${r.years}</td><td class="n">${inr(r.median_price)}</td><td class="muted">${num(r.median_km)}</td><td style="text-align:right"><a class="up" href="/appraise?cat=${c}&make=${encodeURIComponent(r.make)}&model=${encodeURIComponent(r.model)}">Appraise ${ic('arrow',12)}</a></td></tr>`).join('')}</table>`}
+load('car');document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-c]').forEach(x=>x.classList.toggle('on',x==b));load(b.dataset.c)})})();
+</script></body></html>

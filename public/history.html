@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>History - PriceLens</title><link rel="stylesheet" href="/app.css"></head><body>
+<div id="app"><div class="mono">Your past estimates</div><h1 class="serif" style="margin:8px 0 24px">History.</h1><div id="h"></div></div>
+<script src="/app.js"></script><script>
+(async()=>{const user=await shell('side','/history');const H=document.getElementById('h');
+if(!user){H.innerHTML=`<div class="card" style="padding:44px;text-align:center"><div class="serif" style="font-size:30px">Sign in to see your history</div><p class="muted" style="margin:10px 0 22px">Estimates you make while signed in are saved here.</p><a class="btn" href="/login?next=/history">Sign in</a></div>`;return}
+const rows=await api('/api/history');
+H.innerHTML=rows.length?`<div class="card"><table class="t"><tr><th>When</th><th>Vehicle</th><th>Year</th><th>Km</th><th style="text-align:right">Fair estimate</th><th></th></tr>${rows.map(r=>`<tr><td class="muted">${new Date(r.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</td><td>${esc(r.input.variant||r.input.model)}</td><td>${r.input.year}</td><td>${num(r.input.km)}</td><td class="n" style="text-align:right">${inr(r.price.fair)}</td><td style="text-align:right"><a class="up" href="/result?id=${r.id}">Open ${ic('arrow',12)}</a></td></tr>`).join('')}</table></div>`:`<div class="card" style="padding:44px;text-align:center"><div class="serif" style="font-size:30px">No estimates yet</div><p class="muted" style="margin:10px 0 22px">Appraise something and it will show up here.</p><a class="btn" href="/appraise">Appraise an item</a></div>`})();
+</script></body></html>

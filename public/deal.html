@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Is this a fair deal? - PriceLens</title><link rel="stylesheet" href="/app.css"></head><body>
+<div id="app">
+<div class="mono">Check a seller's price</div><h2 class="serif" style="margin:8px 0 26px">Is this a fair deal?</h2>
+<div class="grid cols" style="grid-template-columns:repeat(3,1fr);align-items:start">
+ <form class="card" id="f" style="grid-column:span 2"><div class="lab" id="l0"></div>
+  <div class="grid" style="grid-template-columns:repeat(4,1fr)">
+   <label class="f"><div class="lab">Category</div><select id="cat"><option value="car">Car</option><option value="bike">Bike</option></select></label>
+   <label class="f"><div class="lab">Make</div><select id="make"></select></label>
+   <label class="f" style="grid-column:span 2"><div class="lab">Model</div><select id="model"></select></label>
+   <label class="f"><div class="lab">Model year</div><input id="year" type="number" min="1990" max="2020" required></label>
+   <label class="f"><div class="lab">Km driven</div><input id="km" type="number" min="0" required></label>
+   <label class="f"><div class="lab">Owner</div><select id="owner"><option value="1">1st</option><option value="2">2nd</option><option value="3">3rd</option><option value="4">4th+</option></select></label>
+   <label class="f"><div class="lab">Seller</div><select id="seller"><option>Individual</option><option>Dealer</option></select></label>
+   <label class="f" id="fw"><div class="lab">Fuel</div><select id="fuel"><option>Petrol</option><option>Diesel</option><option>CNG</option></select></label>
+   <label class="f" id="tw"><div class="lab">Gearbox</div><select id="trans"><option>Manual</option><option>Automatic</option></select></label>
+   <label class="f" style="grid-column:span 2"><div class="lab" style="color:#042a2e">Seller asks (₹)</div><input id="ask" type="number" min="1" required placeholder="e.g. 520000"></label></div>
+  <div style="margin-top:18px;display:flex;gap:12px;align-items:center"><button class="btn" id="go">Check this price</button><span id="err"></span></div></form>
+ <div class="card"><div class="lab" id="l1"></div><div id="radar"></div></div>
+ <div class="card" id="out" style="grid-column:span 3;display:none"></div>
+</div></div>
+<script src="/app.js"></script><script>
+(async()=>{
+await shell('top','/deal');const meta=await api('/api/meta');const Q=new URLSearchParams(location.search);const $=id=>document.getElementById(id);
+$('l0').innerHTML=ic('link',14)+' Details of the listing you are looking at';$('l1').innerHTML=ic('shield',14)+' Risk checklist';
+function fillMake(){const c=meta.categories[$('cat').value];$('make').innerHTML=Object.keys(c.makes).sort().map(m=>`<option>${esc(m)}</option>`).join('');fillModel();$('fw').style.display=$('tw').style.display=$('cat').value=='car'?'':'none'}
+function fillModel(){const c=meta.categories[$('cat').value];$('model').innerHTML=(c.makes[$('make').value]||[]).map(m=>`<option>${esc(m.model)}</option>`).join('')}
+$('cat').onchange=fillMake;$('make').onchange=fillModel;fillMake();
+if(Q.get('cat')){$('cat').value=Q.get('cat');fillMake();if(Q.get('make')){$('make').value=Q.get('make');fillModel()}if(Q.get('model'))$('model').value=Q.get('model');for(const [k,id] of [['year','year'],['km','km'],['owner','owner'],['fuel','fuel'],['transmission','trans']])if(Q.get(k))$(id).value=Q.get(k)}
+const FLAGS=['Seller wants an advance before you see the vehicle','Seller will not allow an inspection or test ride','RC, insurance or ownership papers missing or unclear','Odometer reading looks low for the condition','Heavy pressure to decide today'];
+let flags=new Set(),verdict=null;
+function radar(){$('radar').innerHTML=`<div style="font-size:13px;line-height:1.5">${verdict?`<div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-start"><span class="${verdict.tone=='warn'||verdict.tone=='bad'?'dn':'up'}">${ic(verdict.tone=='warn'||verdict.tone=='bad'?'alert':'check',16)}</span><span>${esc(verdict.tone=='warn'?'Price is far below the usual range. Verify the seller carefully.':verdict.tone=='bad'?'Price is above the usual range.':'Price is inside or near the usual range.')}</span></div>`:'<div class="muted" style="margin-bottom:12px">Run the price check to include the price signal.</div>'}
+  ${FLAGS.map((f,i)=>`<label style="display:flex;gap:10px;margin:8px 0;cursor:pointer"><input type="checkbox" data-i="${i}" ${flags.has(i)?'checked':''} style="accent-color:#e0431a;margin-top:3px"> <span>${esc(f)}</span></label>`).join('')}
+  <div class="mono" style="margin-top:12px;${flags.size?'color:#e0431a':''}">${flags.size} red flag${flags.size==1?'':'s'} ticked${flags.size>=2?' · walk away unless resolved':''}</div></div>`;
+  $('radar').querySelectorAll('input').forEach(c=>c.onchange=()=>{c.checked?flags.add(+c.dataset.i):flags.delete(+c.dataset.i);radar()})}
+radar();
+$('f').onsubmit=async e=>{e.preventDefault();$('go').disabled=true;$('err').innerHTML='';
+ try{const v=await api('/api/deal-check',{category:$('cat').value,make:$('make').value,model:$('model').value,year:$('year').value,km:$('km').value,owner:$('owner').value,seller:$('seller').value,fuel:$('fuel').value,transmission:$('trans').value,asking:$('ask').value});verdict=v;radar();
+  const a=v.appraisal,p=a.price,over=v.diff>0;const typ=Math.round(meta.categories[a.input.category].median_kmpa*Math.max(a.input.age,.5));
+  const o=$('out');o.style.display='block';o.className='card fade';o.innerHTML=`<div style="display:flex;gap:30px;align-items:center;flex-wrap:wrap"><div><div class="lab">Seller asks</div><div class="serif" style="font-size:56px">${inr(v.asking)}</div></div><div style="font-size:30px;color:#3f7378">${ic('arrow',28)}</div><div><div class="lab">PriceLens fair asking</div><div class="serif up" style="font-size:56px">${inr(p.fair)}</div></div>
+   <div style="margin-left:auto;text-align:right"><span class="badge ${v.tone=='good'||v.tone=='ok'?'ok':'warn'}" style="font-size:12px;padding:8px 14px">${Math.abs(v.pct)}% ${over?'above':'below'} fair</span><div style="margin-top:8px;font-size:14px">${esc(v.verdict)}</div></div></div>
+   <div class="mono" style="margin-top:20px">Usual range ${inr(p.low)} - ${inr(p.high)} · counter around ${inr(v.counter)} · think twice above ${inr(v.walkAway)}</div>
+   <div class="grid cols" style="grid-template-columns:1fr 1fr;margin-top:22px"><div><div class="lab">${ic('gauge',14)} Usage benchmark</div><div style="font-size:14px">${num(a.input.km)} km vs ${num(typ)} km typical for a ${a.input.age}-year-old in the data (${a.input.km>typ*1.25?'<span class="dn">higher than usual</span>':a.input.km<typ*.75?'<span class="up">lower than usual</span>':'about usual'}). A very low reading deserves a service-history check.</div></div>
+   <div><div class="lab">${ic('list',14)} Comparable listings</div><table class="t">${a.comps.slice(0,4).map(c=>`<tr><td>${esc(c.name)}<div class="mono">${c.year} · ${num(c.km)} km</div></td><td class="n" style="text-align:right">${inr(c.price)}</td></tr>`).join('')}</table></div></div>
+   <div class="note" style="margin-top:16px;font-size:12px">The comparison uses asking prices from ${a.vintage.year}-era listings. A seller above or below the range is a prompt to ask questions, not proof of a bad deal.</div>`;
+ }catch(x){$('err').innerHTML=`<span class="dn">${esc(x.message)}</span>`}$('go').disabled=false};
+})();
+</script></body></html>

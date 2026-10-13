@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PriceLens - what is it worth?</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a8f9c' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7.5'/%3E%3Ccircle cx='11' cy='11' r='3' fill='%230a8f9c'/%3E%3Cpath d='m20.5 20.5-4-4'/%3E%3C/svg%3E"><link rel="stylesheet" href="/app.css"></head><body>
+<div id="app">
+<div style="display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:12px"><div><div class="mono" id="today"></div><h1 class="serif" style="margin-top:8px">Know your price.</h1></div><div id="topright" style="display:flex;gap:10px"></div></div>
+<div class="grid cols" style="grid-template-columns:repeat(12,1fr);margin-top:26px">
+ <div class="card tile" style="grid-column:span 8;padding:30px">
+  <div class="lab">New appraisal</div>
+  <form id="f" style="background:#f7fdfd;border:1.5px solid #042a2e;border-radius:16px;padding:6px 8px 6px 8px;display:flex;gap:8px;align-items:center;margin:6px 0 14px"><input id="q" type="text" placeholder="Describe it: Maruti Swift 2017 petrol 60000 km" style="border:0;box-shadow:none;font-size:19px;padding:14px;background:transparent;color:#042a2e" autocomplete="off"><button class="btn" style="padding:13px 22px;white-space:nowrap" id="go">Get my price <span id="arr"></span></button></form>
+  <div id="msg" style="margin-bottom:12px"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="chip" href="/appraise?cat=car" id="c1"></a><a class="chip" href="/appraise?cat=bike" id="c2"></a><button class="chip" id="mic" type="button" hidden></button><a class="chip" href="/deal" id="c4"></a></div>
+ </div>
+ <div class="card" style="grid-column:span 4"><div class="lab" id="l1"></div><div id="idx"><div class="mono">Loading...</div></div></div>
+ <div class="card" style="grid-column:span 7"><div style="display:flex;justify-content:space-between;align-items:center"><div class="lab" id="l2"></div><div style="display:flex;gap:6px"><button class="chip on" data-c="car">Cars</button><button class="chip" data-c="bike">Bikes</button></div></div><div id="movers"></div></div>
+ <div style="grid-column:span 5;display:grid;gap:16px;align-content:start">
+  <div class="card" id="vc"></div>
+  <div class="card" id="wait"></div>
+  <a class="card" href="/deal" style="display:block"><div class="lab" id="l3"></div><div style="font-size:15px">Seller quoted a price? Enter it and see where it sits against the listing range.</div><div class="mono up" style="margin-top:10px" id="l4"></div></a>
+ </div>
+</div>
+<div class="note" style="margin-top:20px" id="basis"></div>
+</div>
+<script src="/app.js"></script><script>
+(async()=>{
+document.getElementById('today').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'}).toUpperCase();
+const user=await shell('side','/');
+document.getElementById('arr').innerHTML=ic('arrow',15);document.getElementById('c1').innerHTML=ic('car',14)+' Car';document.getElementById('c2').innerHTML=ic('bike',14)+' Bike';document.getElementById('c4').innerHTML=ic('link',14)+' Check a deal';
+document.getElementById('l1').innerHTML=ic('trend',14)+' How prices fall with age · cars';document.getElementById('l2').innerHTML=ic('trend',14)+' Most-listed models · median asking price';document.getElementById('l3').innerHTML=ic('scale',14)+' Deal checker';document.getElementById('l4').innerHTML='Open the checker '+ic('arrow',13);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){const b=document.getElementById('mic');b.hidden=false;b.innerHTML=ic('mic',14)+' Speak';b.onclick=()=>{const r=new SR();r.lang='en-IN';r.onresult=e=>{document.getElementById('q').value=e.results[0][0].transcript;document.getElementById('f').requestSubmit()};r.start();b.innerHTML=ic('mic',14)+' Listening...'};}
+document.getElementById('f').onsubmit=async e=>{e.preventDefault();const t=document.getElementById('q').value.trim();if(!t)return;const msg=document.getElementById('msg'),go=document.getElementById('go');go.disabled=true;
+ try{const p=await api('/api/parse',{text:t});
+  if(!p.ok){msg.innerHTML=`<div class="note" style="background:#fff;color:#042a2e"><b>${esc(p.reason)}</b><div style="margin-top:6px;color:#3f7378">Supported today: ${p.supported.map(esc).join(' · ')}</div></div>`;go.disabled=false;return}
+  const u=new URLSearchParams({cat:p.category,make:p.make,model:p.model});for(const k of ['year','km','owner','fuel','transmission'])if(p[k])u.set(k,p[k]);location.href='/appraise?'+u}catch(err){msg.textContent=err.message;go.disabled=false}};
+const mk=await api('/api/market/car');
+document.getElementById('idx').innerHTML=`<div class="serif" style="font-size:54px">${mk.by_age.find(a=>a.age==10)?.retention_pct??'-'}%</div><div class="mono up">still listed at age 10, vs ages 0-3</div>`+lineChart({pts:mk.by_age.filter(a=>a.age%2==0&&a.age<=16).map(a=>({x:a.age,y:a.retention_pct,label:a.age+'y'})),h:150});
+document.getElementById('basis').innerHTML=`<b>Data basis:</b> ${num(mk.rows)} car and ${num((await api('/api/market/bike')).rows)} bike listings. Prices are <b>asking prices from ${'2020-era'} listings</b>, not completed sales. <a href="/methodology" class="up" style="text-decoration:underline">How it works</a>`;
+async function movers(c){const m=await api('/api/market/'+c);document.getElementById('movers').innerHTML=`<table class="t"><tr><th>Model</th><th>Listings</th><th>Median asking</th><th>Median km</th></tr>${m.top.slice(0,6).map(r=>`<tr><td>${esc(r.model)}</td><td class="muted">${r.n}</td><td class="n">${inr(r.median_price)}</td><td class="muted">${num(r.median_km)}</td></tr>`).join('')}</table>`}
+movers('car');document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-c]').forEach(x=>x.classList.toggle('on',x==b));movers(b.dataset.c)});
+const vc=document.getElementById('vc'),w=document.getElementById('wait');
+if(user){const v=await api('/api/vault');
+ vc.innerHTML=`<div class="lab">${ic('wallet',14)} Your vault</div>`+(v.items.length?`<div class="serif" style="font-size:44px">${inr(v.total)}</div><div class="mono">${v.items.length} item${v.items.length==1?'':'s'} · fair estimates</div><div style="margin-top:12px"><a class="up" href="/vault">Open vault ${ic('arrow',13)}</a></div>`:`<div style="font-size:15px">Nothing saved yet. Appraise an item and save it to see its value tracked here.</div>`);
+ w.innerHTML=`<div class="lab">${ic('clock',14)} Cost of waiting 12 months</div>`+(v.items.length?`<div class="serif ${v.change12<0?'dn':'up'}" style="font-size:40px">${v.change12<0?'-':'+'}${inr(Math.abs(v.change12))}</div><div class="mono" style="margin-top:6px">across your vault, from the age-price pattern</div>`:`<div style="font-size:15px;color:#3f7378">Appears once you save an item.</div>`)}
+else{vc.innerHTML=`<div class="lab">${ic('wallet',14)} Your vault</div><div style="font-size:15px">Sign in to save items and track their worth.</div><div style="margin-top:12px"><a class="up" href="/login">Sign in or create account ${ic('arrow',13)}</a></div>`;w.innerHTML=`<div class="lab">${ic('clock',14)} Cost of waiting 12 months</div><div style="font-size:15px;color:#3f7378">Every appraisal shows how much a year of waiting is expected to cost.</div>`}
+})();
+</script></body></html>

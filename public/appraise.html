@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Appraise - PriceLens</title><link rel="stylesheet" href="/app.css"></head><body>
+<div id="app">
+<div class="grid cols" style="grid-template-columns:240px 1fr 360px;gap:44px;align-items:start">
+ <div><div class="mono" style="margin-bottom:20px" id="stepno"></div><div class="steps" id="steps"></div></div>
+ <div id="stage"></div>
+ <div class="card" style="position:sticky;top:96px"><div class="lab" id="rl"></div><div class="serif" id="est" style="font-size:60px;line-height:1">-</div><div class="mono" id="estsub" style="margin-top:6px">Fill in the details to see an estimate</div><div id="estbox" style="margin-top:20px"></div><div class="note" style="margin-top:18px;font-size:12px" id="estnote"></div></div>
+</div></div>
+<script src="/app.js"></script><script>
+(async()=>{
+await shell('top','/appraise');
+const meta=await api('/api/meta');const Q=new URLSearchParams(location.search);
+const S={cat:Q.get('cat')||'',make:Q.get('make')||'',model:Q.get('model')||'',variant:'',year:+Q.get('year')||'',km:+Q.get('km')||'',owner:+Q.get('owner')||1,seller:'Individual',fuel:Q.get('fuel')||'',transmission:Q.get('transmission')||''};
+function defaults(){const e=cur()&&me_();if(S.cat=='car'&&e){if(!S.fuel||!e.fuels.includes(S.fuel))S.fuel=e.fuels[0];if(!S.transmission)S.transmission=e.manual?'Manual':'Automatic'}}
+let step=S.cat&&S.model?(S.year&&S.km?4:2):1;
+document.getElementById('rl').innerHTML=ic('gauge',14)+' Running estimate';
+const STEPS=['Category','Model & year','Usage & ownership','Review'];
+const cur=()=>meta.categories[S.cat];
+const models=()=>cur()?.makes[S.make]||[];
+const me_=()=>models().find(m=>m.model===S.model);
+function side(){document.getElementById('stepno').textContent=`Appraisal · step ${step} of 4`;document.getElementById('steps').innerHTML=STEPS.map((s,i)=>`<div class="${i+1==step?'on':i+1<step?'done':''}"><i></i>${s}</div>`).join('')}
+function body(){return{category:S.cat,make:S.make,model:S.model,variant:S.variant||undefined,year:S.year,km:S.km,owner:S.owner,seller:S.seller,fuel:S.fuel||undefined,transmission:S.transmission||undefined}}
+let tm;function est(){clearTimeout(tm);tm=setTimeout(async()=>{const E=document.getElementById('est');
+ if(!(S.cat&&S.model&&S.year&&S.km!==''&&S.km!==undefined)){E.textContent='-';document.getElementById('estbox').innerHTML='';return}
+ try{const r=await api('/api/estimate',body());E.textContent=inrK(r.price.fair);document.getElementById('estsub').textContent=`Likely range ${inrK(r.price.low)} - ${inrK(r.price.high)}`;
+  document.getElementById('estbox').innerHTML=`<div style="display:flex;justify-content:space-between;font-size:13px;margin:8px 0"><span class="muted">Models of this kind in data</span><span>${r.dataset.rows_model} listings</span></div><div style="display:flex;justify-content:space-between;font-size:13px;margin:8px 0"><span class="muted">Median asking for model</span><span>${inrK(r.dataset.median_price_model)}</span></div>`+(r.warnings||[]).map(w=>`<div class="note warn" style="margin-top:8px;font-size:12px">${esc(w)}</div>`).join('')}
+ catch(e){E.textContent='-';document.getElementById('estsub').textContent='';document.getElementById('estbox').innerHTML=`<div class="note warn">${esc(e.message)}</div>`}},250)}
+document.getElementById('estnote').textContent='Estimate of the typical asking price in 2020-era listings. Condition, accidents and location are not in the data, so they are not priced.';
+const sel=(id,opts,val,ph)=>`<select id="${id}">${ph?`<option value="">${ph}</option>`:''}${opts.map(o=>`<option value="${esc(o.v??o)}" ${(o.v??o)==val?'selected':''}>${esc(o.t??o)}</option>`).join('')}</select>`;
+function render(){defaults();side();est();const st=document.getElementById('stage');
+ if(step==1){st.innerHTML=`<h2 class="serif fade">What are you<br>pricing?</h2><div class="grid fade" style="grid-template-columns:1fr 1fr;margin-top:34px">
+  ${[['car','Car','car'],['bike','Bike or scooter','bike']].map(([k,t,i])=>`<button class="card" data-cat="${k}" style="text-align:left;cursor:pointer;${S.cat==k?'border-color:#0a8f9c;box-shadow:0 0 0 3px rgba(10,143,156,.2)':''}"><div class="lab">${ic(i,15)} ${t}</div><div class="serif" style="font-size:34px">${num(meta.categories[k].rows)}</div><div class="mono">listings in the data</div></button>`).join('')}</div>
+  <div class="card fade" style="margin-top:16px"><div class="lab">${ic('lock',14)} Not available yet</div><div style="display:flex;gap:8px;flex-wrap:wrap">${['Phones','Laptops','Appliances','Furniture','Cameras','Gaming'].map(x=>`<span class="chip off">${x}</span>`).join('')}</div><div style="margin-top:12px;font-size:13px;color:#3f7378">PriceLens will not guess prices without verified data. Phones and laptops are next once a trustworthy dataset is found.</div></div>`;
+  st.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{if(S.cat!=b.dataset.cat){S.cat=b.dataset.cat;S.make=S.model=S.variant='';}step=2;render()})}
+ if(step==2){const makes=Object.keys(cur().makes).sort();const ms=models();const e=me_();
+  st.innerHTML=`<h2 class="serif fade">Tell us about<br>the ${S.cat=='car'?'car':'bike'}.</h2><div class="grid fade" style="grid-template-columns:1fr 1fr;margin-top:34px">
+  <label class="card f"><div class="lab">${ic(S.cat,14)} Make</div>${sel('make',makes,S.make,'Choose make')}</label>
+  <label class="card f"><div class="lab">${ic('tag',14)} Model</div>${sel('model',ms.map(m=>({v:m.model,t:`${m.model} (${m.n})`})),S.model,S.make?'Choose model':'Pick make first')}</label>
+  ${S.cat=='car'&&e?`<label class="card f" style="grid-column:span 2"><div class="lab">${ic('layers',14)} Variant (optional - sets engine, fuel, gearbox)</div>${sel('variant',e.variants.map(v=>({v:v.name,t:`${v.name} · ${v.fuel} · ${v.trans?'Auto':'Manual'}`})),S.variant,'Not sure / any variant')}</label>`:''}
+  <label class="card f"><div class="lab">${ic('clock',14)} Model year</div><input id="year" type="number" min="1990" max="${meta.ref_year}" value="${S.year}" placeholder="e.g. 2017"><div class="mono" style="margin-top:8px">Data covers up to ${meta.ref_year}</div></label>
+  ${e?`<div class="card"><div class="lab">${ic('db',14)} In the data</div><div style="font-size:14px">${e.n} listings, model years ${e.min_year}-${e.max_year}</div><div class="mono" style="margin-top:6px">median asking ${inrK(e.median_price)}</div></div>`:''}</div>
+  <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:26px"><button class="ghost" id="back">Back</button><button class="btn" id="next">Continue ${ic('arrow',15)}</button></div><div id="err" style="margin-top:12px"></div>`;
+  document.getElementById('make').onchange=e=>{S.make=e.target.value;S.model=S.variant='';render()};document.getElementById('model').onchange=e=>{S.model=e.target.value;S.variant='';const m=me_();if(m&&S.cat=='car'){S.fuel=m.fuels[0]}render()};
+  const v=document.getElementById('variant');if(v)v.onchange=e=>{S.variant=e.target.value;const x=me_().variants.find(z=>z.name==S.variant);if(x){S.fuel=x.fuel;S.transmission=x.trans?'Automatic':'Manual'}est()};
+  document.getElementById('year').oninput=e=>{S.year=+e.target.value;est()};
+  document.getElementById('back').onclick=()=>{step=1;render()};document.getElementById('next').onclick=()=>{if(!S.model)return err('Choose a make and model.');if(!(S.year>=1990&&S.year<=meta.ref_year))return err(`Enter a model year between 1990 and ${meta.ref_year}. Newer vehicles are outside the verified data.`);step=3;render()}}
+ if(step==3){const e=me_();const isCar=S.cat=='car';
+  st.innerHTML=`<h2 class="serif fade">How has it<br>been used?</h2><div class="grid fade" style="grid-template-columns:1fr 1fr;margin-top:34px">
+  <label class="card f"><div class="lab">${ic('gauge',14)} Kilometres driven</div><input id="km" type="number" min="0" value="${S.km}" placeholder="e.g. 60000"><input id="kmr" type="range" min="0" max="250000" step="1000" value="${S.km||0}" style="width:100%;margin-top:12px;accent-color:#0a8f9c"><div class="mono" style="margin-top:6px">Typical for the age: ~${num(cur().median_kmpa)} km / year</div></label>
+  <div class="card"><div class="lab">${ic('layers',14)} Owner</div><div style="display:flex;gap:8px;flex-wrap:wrap" id="own">${[1,2,3,4].map(o=>`<button class="chip ${S.owner==o?'on':''}" data-o="${o}">${o==1?'1st':o==2?'2nd':o==3?'3rd':'4th+'}</button>`).join('')}</div><div class="lab" style="margin-top:18px">${ic('tag',14)} Being sold by</div><div style="display:flex;gap:8px">${['Individual','Dealer'].map(o=>`<button class="chip ${S.seller==o?'on':''}" data-s="${o}">${o}</button>`).join('')}</div></div>
+  ${isCar&&e?`<div class="card"><div class="lab">${ic('gauge',14)} Fuel</div><div style="display:flex;gap:8px">${e.fuels.map(f=>`<button class="chip ${S.fuel==f?'on':''}" data-f="${f}">${f}</button>`).join('')}</div></div><div class="card"><div class="lab">${ic('gauge',14)} Gearbox</div><div style="display:flex;gap:8px">${['Manual','Automatic'].filter(t=>t=='Manual'?e.manual:e.auto).map(f=>`<button class="chip ${S.transmission==f?'on':''}" data-t="${f}">${f}</button>`).join('')}</div></div>`:''}</div>
+  <div class="note fade" style="margin-top:16px">Condition, accident history, service records and city are not in the dataset, so PriceLens does not adjust for them. Treat the range as the typical spread for this model.</div>
+  <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:26px"><button class="ghost" id="back">Back</button><button class="btn" id="next">Continue ${ic('arrow',15)}</button></div><div id="err" style="margin-top:12px"></div>`;
+  const km=document.getElementById('km'),kr=document.getElementById('kmr');km.oninput=()=>{S.km=km.value===''?'':+km.value;kr.value=S.km||0;est()};kr.oninput=()=>{S.km=+kr.value;km.value=S.km;est()};
+  st.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{S.owner=+b.dataset.o;render()});st.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{S.seller=b.dataset.s;render()});st.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{S.fuel=b.dataset.f;S.variant='';render()});st.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{S.transmission=b.dataset.t;S.variant='';render()});
+  document.getElementById('back').onclick=()=>{step=2;render()};document.getElementById('next').onclick=()=>{if(S.km===''||S.km<0)return err('Enter the kilometres driven.');step=4;render()}}
+ if(step==4){const rows=[['Category',S.cat=='car'?'Car':'Bike'],['Vehicle',(S.variant||S.model)],['Model year',S.year],['Kilometres',num(S.km)+' km'],['Owner',S.owner],['Seller',S.seller],...(S.cat=='car'?[['Fuel',S.fuel||'-'],['Gearbox',S.transmission||'-']]:[])];
+  st.innerHTML=`<h2 class="serif fade">Ready to<br>price it.</h2><div class="card fade" style="margin-top:34px">${rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #aedde0"><span class="muted">${r[0]}</span><span>${esc(r[1])}</span></div>`).join('')}</div>
+  <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:26px"><button class="ghost" id="back">Back</button><button class="btn" id="go">Get my price ${ic('arrow',15)}</button></div><div id="err" style="margin-top:12px"></div>`;
+  document.getElementById('back').onclick=()=>{step=3;render()};document.getElementById('go').onclick=async e=>{e.target.disabled=true;e.target.innerHTML='<span class="spin"></span> Pricing...';try{const r=await api('/api/appraise',body());location.href='/result?id='+r.id}catch(x){err(x.message);e.target.disabled=false;e.target.innerHTML='Get my price'}}}
+}
+function err(m){document.getElementById('err').innerHTML=`<div class="note warn">${esc(m)}</div>`}
+render();
+})();
+</script></body></html>

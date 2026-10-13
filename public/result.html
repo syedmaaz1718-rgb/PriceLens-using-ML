@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your estimate - PriceLens</title><link rel="stylesheet" href="/app.css"></head><body>
+<div id="app"><div id="r"><div class="mono">Loading...</div></div></div>
+<script src="/app.js"></script><script>
+(async()=>{
+const user=await shell('top','/appraise');
+const id=new URLSearchParams(location.search).get('id');const R=document.getElementById('r');
+try{const {result:a,created_at}=await api('/api/appraisals/'+id);const i=a.input,p=a.price;
+ const span=p.high-p.low||1,pin=Math.max(2,Math.min(98,(p.fair-p.low)/span*100*.62+19));
+ const loss=a.waiting12,lossPct=loss/p.fair*100;const typical=a.factors[0];
+ R.innerHTML=`<div class="mono fade">${esc(i.category=='car'?'Car':'Bike')} · ${esc(i.variant||i.model)} · ${i.year} · ${num(i.km)} km · owner ${i.owner}</div>
+ <div class="grid cols fade" style="grid-template-columns:1.2fr 1fr;margin-top:18px">
+  <div class="card" style="padding:38px"><div class="lab">${ic('tag',14)} PriceLens estimates the asking price at</div><div class="serif" style="font-size:clamp(70px,9vw,140px);line-height:1">${inr(p.fair)}</div>
+   <div class="rangebar"><div class="tr"></div><div class="fl" style="left:19%;width:62%"></div><div class="pin" style="left:${pin}%"></div></div>
+   <div style="display:flex;justify-content:space-between" class="mono"><span>Low end ${inrK(p.low)}</span><span>Fair ${inrK(p.fair)}</span><span>High end ${inrK(p.high)}</span></div>
+   <div style="display:flex;gap:36px;margin-top:34px;flex-wrap:wrap"><div><div class="lab">Listings of this model</div><div class="serif" style="font-size:38px">${a.dataset.rows_model}</div></div><div><div class="lab">Typical error on held-out listings</div><div class="serif" style="font-size:38px">${a.quality.median_abs_pct_error}%</div></div><div><div class="lab">Range captured</div><div class="serif" style="font-size:38px">${a.quality.range_coverage_pct}%</div></div></div>
+   <div class="mono" style="margin-top:18px;text-transform:none;letter-spacing:.02em;font-size:12px">Basis: ${esc(a.basis)} · ${esc(a.vintage.label)}. Error and range figures were measured on ${a.quality.holdout_n} listings the model never saw. The range is meant to contain about 80% of them.</div></div>
+  <div class="card"><div class="lab">${ic('trend',14)} Depreciation curve · next 5 years</div>${lineChart({w:420,h:240,band:true,pts:a.curve.map(c=>({x:c.t,y:c.mid,lo:c.low,hi:c.high,label:c.t==0?'now':'+'+c.t+'y'}))})}
+   <div class="mono" style="margin-top:8px;text-transform:none;letter-spacing:.02em;font-size:12px">Same vehicle at ${num(a.rateKmPerYear)} km a year, priced by the age-price pattern in the data. Shaded band = likely range. ${a.curve[5]?`In 5 years: about ${inrK(a.curve[5].mid)}.`:''}</div></div></div>
+ ${(a.warnings||[]).map(w=>`<div class="note warn" style="margin-top:14px">${esc(w)}</div>`).join('')}
+ <div class="grid fade cols" style="grid-template-columns:repeat(4,1fr);margin-top:16px">
+  <div class="card"><div class="lab">${ic('layers',14)} What moved the price</div><div style="font-size:13px;line-height:2.1">${a.factors.map(f=>f.kind=='base'?`<div style="color:#3f7378">${esc(f.label)} <b style="float:right;color:#042a2e">${inrK(f.amount)}</b></div>`:`<div>${esc(f.label)}<span class="${f.amount<0?'dn':'up'}" style="float:right">${f.amount<0?'-':'+'}${inrK(Math.abs(f.amount))}</span></div>`).join('')}</div></div>
+  <div class="card"><div class="lab">${ic('clock',14)} Cost of waiting a year</div><div class="serif ${loss<0?'dn':'up'}" style="font-size:36px">${loss<0?'-':'+'}${inr(Math.abs(loss))}</div><div style="color:#3f7378;font-size:13px;margin-top:6px">${Math.abs(lossPct).toFixed(0)}% ${loss<0?'lower':'higher'} at +1 year, after about ${num(a.rateKmPerYear)} more km.</div></div>
+  <div class="card"><div class="lab">${ic('tag',14)} Asking and floor</div><div class="serif" style="font-size:36px">${inrK(p.low)} floor</div><div style="color:#3f7378;font-size:13px;margin-top:6px">Listings like this ask ${inrK(p.fair)} to ${inrK(p.high)}. Real deals can close lower, because these are asking prices.</div></div>
+  <div class="card"><div class="lab">${ic('scale',14)} Sell or hold</div><div class="serif" style="font-size:36px">${loss<-p.fair*.08?'Sell sooner':'No rush'}</div><div style="color:#3f7378;font-size:13px;margin-top:6px">${loss<-p.fair*.08?'The curve drops more than 8% in a year at this age.':'The curve loses less than 8% over the next year at this age.'}</div></div></div>
+ <div class="card fade" style="margin-top:16px"><div class="lab">${ic('list',14)} Closest listings in the data</div><table class="t"><tr><th>Listing</th><th>Year</th><th>Km</th><th>Owner</th><th>Seller</th>${a.comps[0]&&a.comps[0].fuel?'<th>Fuel</th><th>Gearbox</th>':''}<th style="text-align:right">Asking</th></tr>${a.comps.map(c=>`<tr><td>${esc(c.name)}</td><td>${c.year}</td><td>${num(c.km)}</td><td>${c.owner}</td><td>${c.seller}</td>${c.fuel?`<td>${c.fuel}</td><td>${c.trans}</td>`:''}<td class="n" style="text-align:right">${inr(c.price)}</td></tr>`).join('')}</table></div>
+ <div style="display:flex;gap:12px;margin-top:26px;flex-wrap:wrap" class="fade"><button class="btn" id="save">${ic('wallet',15)} Save to my vault</button><a class="ghost" id="deal">${ic('scale',15)} Check a seller's price</a><button class="ghost" id="share">${ic('share',15)} Copy link</button><a class="ghost" href="/appraise">${ic('plus',15)} New appraisal</a></div>`;
+ document.title=`${inrK(p.fair)} · ${i.model} - PriceLens`;
+ const q=new URLSearchParams({cat:i.category,make:i.make,model:i.model,year:i.year,km:i.km,owner:i.owner,fuel:i.fuel||'',transmission:i.trans===undefined?'':(i.trans?'Automatic':'Manual')});document.getElementById('deal').href='/deal?'+q;
+ document.getElementById('share').onclick=()=>{navigator.clipboard.writeText(location.href).then(()=>toast('Link copied'))};
+ document.getElementById('save').onclick=async()=>{if(!user){location.href='/login?next='+encodeURIComponent(location.pathname+location.search);return}
+  const t=prompt('Optional: your target selling price in rupees (leave empty to skip)');try{await api('/api/vault',{input:i,target:t&&+t.replace(/[^\d]/g,'')||null});toast('Saved to your vault');setTimeout(()=>location.href='/vault',700)}catch(e){toast(e.message)}}
+}catch(e){R.innerHTML=`<div class="card"><h2 class="serif">${e.status==404?'Estimate not found':'Could not load'}</h2><p class="muted" style="margin:10px 0 20px">${esc(e.message)}</p><a class="btn" href="/appraise">Start a new appraisal</a></div>`}
+})();
+</script></body></html>
